@@ -5,7 +5,11 @@ import { typeAlreadyExistsError } from '../utils/typeAlreadyExistsError.js';
 import { faker } from '@faker-js/faker';
 import dayjs from 'dayjs';
 import bcrypt from 'bcrypt';
-import { CardInsertData, TransactionTypes }from '../repositories/cardRepository';
+import { CardInsertData, TransactionTypes, CardUpdateData }from '../repositories/cardRepository';
+import { cardNotFound } from '../utils/cardNotFound.js';
+import { expiredCardError } from '../utils/expiredCardError.js';
+import { alreadyActivatedError } from '../utils/alreadyActivatedError.js';
+import { cvcWrongError } from '../utils/cvcWrongError.js';
 
 export async function createCard(employeeId: number, type: TransactionTypes) {
   const employeeData = await employeeRepository.findById(employeeId);
@@ -52,4 +56,32 @@ export async function createCard(employeeId: number, type: TransactionTypes) {
 
   await cardRepository.insert(card);
   
+}
+
+export async function activateCard(cardId: number, cvc: number, password: string) {
+  const verifyCard = await cardRepository.findById(cardId);
+  
+  if (!verifyCard) throw cardNotFound('id card was not found');
+  
+  const verifyDate = dayjs().format('MM/YY').split('/');
+  const validateDate = verifyCard.expirationDate.split('/');  
+
+  if ((verifyDate[1] === validateDate[1] && verifyDate[0] > validateDate[0])
+  || (verifyDate[1] > validateDate[1])) {
+    throw expiredCardError('this card is expired');
+  }
+
+  if (verifyCard.password !== null) throw alreadyActivatedError('this card is already activated');
+
+  if (!bcrypt.compareSync(cvc.toString(), verifyCard.securityCode)) {
+    throw cvcWrongError("security code doesn't match");
+  }
+
+  const passHash = bcrypt.hashSync(password, 10);
+
+  let card: CardUpdateData = {
+    password: passHash,
+  };
+
+  await cardRepository.update(cardId, card);
 }
