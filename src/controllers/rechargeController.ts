@@ -8,6 +8,7 @@ export async function recharge(req: Request, res: Response) {
     await rechargeServices.postRecharge(card, amount);
     res.sendStatus(201);
   } catch (err) {
+    if (err.type === 'card-expired') return res.status(403).send(err.message);
     console.log(err);
     res.sendStatus(500);
   }
